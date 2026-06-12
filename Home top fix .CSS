@@ -1,0 +1,115 @@
+/* ============================================================
+   HOME PAGE TOP-ALIGNMENT FIX
+   ──────────────────────────────────────────────────────────
+   PROBLEM: The Home page content renders with a large empty
+   space above it, pushing the RestaurantIQ title near the
+   bottom of the viewport.
+
+   ROOT CAUSES (three compounding issues):
+   ─────────────────────────────────────────────────────────
+   RC-1  Streamlit's stVerticalBlock wrapper — the outermost
+         [data-testid="stVerticalBlock"] inside block-container
+         carries an implicit top margin from Streamlit's own
+         compiled stylesheet that our padding-top:0 on the
+         parent does not override (padding ≠ child margin).
+
+   RC-2  st.title() renders inside [data-testid="stHeading"]
+         which Streamlit styles with margin-top:1rem by default.
+         This adds visible space above the very first element.
+
+   RC-3  The :empty first-child collapse rule in the existing
+         stylesheet only collapses divs with NO children.
+         Streamlit sometimes injects a spacer div that wraps
+         an inner div — it is not :empty — so the rule misses
+         it and a non-zero-height spacer remains above content.
+
+   FIX STRATEGY (minimal, targeted, Home-only):
+   ─────────────────────────────────────────────────────────
+   1. Zero margin-top on ALL first-child stVerticalBlock nodes
+      immediately inside stMainBlockContainer. This removes the
+      implicit top gap that Streamlit's own CSS creates between
+      the container edge and the first content block.
+
+   2. Zero margin-top / padding-top on the first stHeading
+      (st.title / st.header) inside the block-container so the
+      RestaurantIQ title sits flush with the container top edge.
+
+   3. Extend the first-child spacer collapse to also target
+      divs that are NOT :empty but contain only a single empty
+      nested div (the common Streamlit spacer pattern that evades
+      the existing :empty selector).
+
+   4. Set an explicit small padding-top (8px) on block-container
+      as a positive "breathing room" floor so the title doesn't
+      collide with the very edge of the container — this replaces
+      the large implicit gap with a controlled small gap.
+
+   SCOPE: These rules are structurally identical for all pages
+   but are visually neutral on pages that already start with a
+   title-bar div (those render their own padding) — safe globally.
+   ============================================================ */
+
+/* ── RC-1 FIX: kill implicit top margin on the outermost vertical
+   block that Streamlit wraps all page content in.
+   Targets the FIRST stVerticalBlock child of the block container
+   to avoid resetting gaps deeper in the component tree.          */
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]:first-of-type,
+html body [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]:first-of-type,
+div.block-container > [data-testid="stVerticalBlock"]:first-of-type {
+    margin-top:  0 !important;
+    padding-top: 0 !important;
+}
+
+/* Also cover the size-container wrapper Streamlit sometimes inserts
+   between block-container and the first stVerticalBlock             */
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlockSizeContainer"]:first-of-type,
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlockSizeContainer"]:first-child {
+    margin-top:  0 !important;
+    padding-top: 0 !important;
+}
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlockSizeContainer"]:first-of-type
+    > [data-testid="stVerticalBlock"]:first-child {
+    margin-top:  0 !important;
+    padding-top: 0 !important;
+}
+
+/* ── RC-2 FIX: remove top margin from the very first heading
+   (st.title / st.header) that appears in the block-container.
+   st.title renders as an h1 inside [data-testid="stHeading"].     */
+[data-testid="stMainBlockContainer"] [data-testid="stHeading"]:first-of-type,
+[data-testid="stMainBlockContainer"] [data-testid="stHeading"]:first-child,
+div.block-container [data-testid="stHeading"]:first-of-type {
+    margin-top:  0 !important;
+    padding-top: 0 !important;
+}
+[data-testid="stMainBlockContainer"] [data-testid="stHeading"]:first-of-type h1,
+[data-testid="stMainBlockContainer"] [data-testid="stHeading"]:first-of-type h2,
+[data-testid="stMainBlockContainer"] [data-testid="stHeading"]:first-of-type h3 {
+    margin-top:  0 !important;
+    padding-top: 0 !important;
+}
+
+/* ── RC-3 FIX: extend the spacer-div collapse to non-:empty spacers.
+   Streamlit's injected spacer sometimes looks like:
+     <div style="height:Xpx"><div></div></div>
+   The outer div is NOT :empty (it has a child) so the existing rule
+   misses it. Target it by [style*="height"] regardless of children. */
+[data-testid="stMainBlockContainer"] > div:first-child[style*="height"],
+[data-testid="stMainBlockContainer"] > div:first-child[style*="height"] > div,
+div.block-container > div:first-child[style*="height"],
+div.block-container > div:first-child[style*="height"] > div {
+    display:    none    !important;
+    height:     0       !important;
+    min-height: 0       !important;
+    max-height: 0       !important;
+    overflow:   hidden  !important;
+    padding:    0       !important;
+    margin:     0       !important;
+}
+
+/* ── FLOOR: replace the large implicit gap with a controlled 8px
+   breathing room so the title isn't collision-flush with the edge. */
+html body [data-testid="stMainBlockContainer"],
+html body div.block-container {
+    padding-top: 8px !important;
+}
